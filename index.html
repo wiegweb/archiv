@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Werkzeugarchiv</title>
+<meta name="description" content="Alle Werkzeuge, die unter github.com/wiegweb liegen, nach Kategorien gefiltert und automatisch mit GitHub abgeglichen.">
+<style>
+/* Layout: ein schmales Register wie ein Findbuch. Kopf mit Zähler, darunter Suche und
+   Kategorien als Filter, dann die Einträge als Zeilen mit Signatur (Repo-Pfad) und Datum. */
+:root{
+  --paper:#f3f5f6;
+  --surface:#ffffff;
+  --ink:#15222b;
+  --muted:#586874;
+  --line:#d6dde1;
+  --accent:#0d6b70;
+  --accent-soft:#dcefee;
+  --warn:#8a5a00;
+  --warn-soft:#fbefd2;
+  --font-body:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --font-sig:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --paper:#0f171c;
+    --surface:#172228;
+    --ink:#e7eef1;
+    --muted:#96a6b0;
+    --line:#293840;
+    --accent:#58c8c4;
+    --accent-soft:#16383a;
+    --warn:#f0c46a;
+    --warn-soft:#3a2f14;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#0f171c;
+  --surface:#172228;
+  --ink:#e7eef1;
+  --muted:#96a6b0;
+  --line:#293840;
+  --accent:#58c8c4;
+  --accent-soft:#16383a;
+  --warn:#f0c46a;
+  --warn-soft:#3a2f14;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0;
+  background:var(--paper);
+  color:var(--ink);
+  font-family:var(--font-body);
+  font-size:16px;
+  line-height:1.45;
+}
+.wrap{max-width:860px;margin:0 auto;padding:28px 18px 56px;display:flex;flex-direction:column;gap:22px}
+header{display:flex;flex-direction:column;gap:6px}
+h1{margin:0;font-size:1.9rem;line-height:1.15;letter-spacing:-.01em;font-weight:750;text-wrap:balance}
+.lede{margin:0;color:var(--muted)}
+.lede a{color:inherit}
+.statusline{
+  display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;
+  font-size:.86rem;color:var(--muted);
+}
+.dot{width:9px;height:9px;border-radius:50%;background:var(--muted);flex:none}
+.statusline[data-state="ok"] .dot{background:var(--accent)}
+.statusline[data-state="warn"] .dot{background:var(--warn)}
+.statusline[data-state="busy"] .dot{background:var(--accent);animation:pulse 1s ease-in-out infinite}
+@keyframes pulse{50%{opacity:.25}}
+@media (prefers-reduced-motion:reduce){.statusline[data-state="busy"] .dot{animation:none}}
+.status-text{flex:1 1 220px;display:flex;align-items:center;gap:8px}
+button,select,input{font:inherit;color:inherit}
+.linkbtn{
+  background:none;border:1px solid var(--line);border-radius:999px;
+  padding:5px 12px;cursor:pointer;font-size:.86rem;color:var(--ink);
+}
+.linkbtn:hover{border-color:var(--accent);color:var(--accent)}
+.controls{display:flex;flex-direction:column;gap:12px}
+.row{display:flex;gap:10px;flex-wrap:wrap}
+.search{
+  flex:1 1 220px;min-width:0;
+  background:var(--surface);border:1px solid var(--line);border-radius:10px;
+  padding:10px 12px;
+}
+.sort{
+  flex:0 1 auto;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 10px;
+}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{
+  background:var(--surface);border:1px solid var(--line);border-radius:999px;
+  padding:7px 12px;cursor:pointer;font-size:.92rem;display:inline-flex;gap:7px;align-items:baseline;
+}
+.chip .n{font-size:.78rem;color:var(--muted);font-variant-numeric:tabular-nums}
+.chip:hover{border-color:var(--accent)}
+.chip[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--surface);font-weight:600}
+.chip[aria-pressed="true"] .n{color:inherit;opacity:.85}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.group{display:flex;flex-direction:column;gap:8px}
+.group h2{
+  margin:0;font-size:.8rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:650;
+  display:flex;justify-content:space-between;gap:10px;border-bottom:1px solid var(--line);padding-bottom:6px;
+}
+.group h2 .n{font-variant-numeric:tabular-nums}
+ul.tools{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.tool{
+  background:var(--surface);border:1px solid var(--line);border-radius:12px;
+  padding:13px 15px;display:flex;flex-direction:column;gap:7px;
+}
+.tool-main{color:inherit;text-decoration:none;display:flex;flex-direction:column;gap:3px}
+.tool-head{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 9px}
+.tool-title{font-weight:680;font-size:1.06rem;color:var(--accent);overflow-wrap:anywhere}
+.tool-main:hover .tool-title{text-decoration:underline}
+.tool-desc{color:var(--ink);font-size:.95rem;overflow-wrap:anywhere}
+.badge{
+  font-size:.72rem;font-weight:650;border-radius:999px;padding:2px 8px;
+  background:var(--accent-soft);color:var(--accent);white-space:nowrap;
+}
+.badge.warn{background:var(--warn-soft);color:var(--warn)}
+.tool-meta{
+  display:flex;flex-wrap:wrap;gap:4px 14px;align-items:baseline;
+  font-size:.8rem;color:var(--muted);
+}
+.sig{font-family:var(--font-sig);font-size:.76rem;overflow-wrap:anywhere}
+.date{font-variant-numeric:tabular-nums;white-space:nowrap}
+.tool-meta a{color:var(--muted)}
+.tool-meta a:hover{color:var(--accent)}
+.empty{
+  border:1px dashed var(--line);border-radius:12px;padding:22px 16px;color:var(--muted);text-align:center;
+}
+#liste{display:flex;flex-direction:column;gap:24px}
+footer{font-size:.84rem;color:var(--muted);border-top:1px solid var(--line);padding-top:14px;max-width:65ch}
+footer p{margin:0 0 6px}
+@media (max-width:480px){
+  h1{font-size:1.6rem}
+  .wrap{padding:22px 16px 48px}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Werkzeugarchiv</h1>
+    <p class="lede"><span id="zaehler">Lädt …</span> unter <a id="kontolink" href="https://github.com/wiegweb" target="_blank" rel="noopener">github.com/wiegweb</a></p>
+    <div class="statusline" id="status" data-state="busy" aria-live="polite">
+      <span class="status-text"><span class="dot" aria-hidden="true"></span><span id="statustext">Gleiche mit GitHub ab …</span></span>
+      <button type="button" class="linkbtn" id="abgleichen">Neu abgleichen</button>
+    </div>
+  </header>
+
+  <section class="controls" aria-label="Filter">
+    <div class="row">
+      <input class="search" id="suche" type="search" placeholder="Suchen: Titel, Beschreibung, Repo" autocomplete="off" aria-label="Werkzeuge durchsuchen">
+      <select class="sort" id="sortierung" aria-label="Sortierung">
+        <option value="kat">Nach Kategorie</option>
+        <option value="neu">Zuletzt geändert</option>
+        <option value="az">A bis Z</option>
+      </select>
+    </div>
+    <div class="chips" id="chips" role="group" aria-label="Kategorie wählen"></div>
+  </section>
+
+  <main id="liste"></main>
+
+  <footer>
+    <p>Die Seite liest bei jedem Öffnen die Repo-Liste von GitHub. Neue Repos und neue Unterordner mit einer <code>index.html</code> erscheinen von selbst, gelöschte verschwinden.</p>
+    <p>Neue Einträge werden nach Stichwörtern einsortiert und tragen die Marke „neu“, bis sie einen festen Titel und eine Kategorie bekommen.</p>
+  </footer>
+</div>
+
+<script>
+(function(){
+'use strict';
+
+/* ---------- Einstellungen ---------- */
+var USER = 'wiegweb';
+var SNAP_DATE = '2026-11-15';            // Stand der eingebauten Liste
+var STORE_KEY = 'werkzeugarchiv-v1';
+var CATS = ['Bewertung & Prüfung','Deutsch','Englisch','Kunst','KI','Schulorganisation','Grundschule','Spiele'];
+var UNSORTED = 'Noch unsortiert';
+
+/* Eingebauter Stand: Repo, letzter Push, gefundene Seiten ('' = index.html im Hauptordner).
+   Stimmt der Push-Zeitpunkt noch, muss GitHub für dieses Repo nicht erneut gefragt werden. */
+var SNAP = [
+  ['pruefungsformate','2026-11-15T12:28:05Z',['']],
+  ['schon-wiede','2026-11-10T09:05:37Z',['']],
+  ['Mathespiel','2026-11-09T16:29:59Z',['','bmx-hitster/','koelsch-hitster/']],
+  ['troemmelche','2026-11-08T21:42:38Z',['']],
+  ['vokabeltester','2026-10-29T15:13:58Z',['']],
+  ['worldcar','2026-10-23T18:28:44Z',['world-car.html','koelsch-quest/','koelsch-quest-3d/']],
+  ['mattismathelerner','2026-10-14T14:47:10Z',['','rezept-werkstatt/']],
+  ['ki-labor','2026-10-13T11:30:22Z',['']],
+  ['examquiz','2026-09-25T08:30:31Z',['']],
+  ['namen-lernen','2026-09-05T22:45:18Z',['']],
+  ['handypause-chat','2026-07-12T17:42:32Z',['']],
+  ['ki-bildbearbeitung-prompt-builder','2026-07-11T18:13:51Z',['']],
+  ['bildbearbeitungmitki','2026-07-11T16:16:03Z',['']],
+  ['pruefungsbeginnabgaberechner','2026-05-14T10:56:28Z',['']],
+  ['kumusterloesungewhgenerator','2026-05-12T16:22:46Z',[]],
+  ['bildanalysetrainer','2026-05-07T04:41:42Z',['']],
+  ['zitierregeln','2026-05-06T07:46:26Z',['']],
+  ['zp10leseverstehen','2026-05-05T12:59:26Z',['']],
+  ['notenschluesselberechner','2026-05-03T10:53:39Z',['']],
+  ['Notenschl-ssel','2026-04-24T14:32:48Z',['']],
+  ['bewertungsslider','2025-12-19T09:15:57Z',['']]
+];
+
+/* Feste Titel, Beschreibungen und Kategorien. Schlüssel: Repo + '/' + Pfad,
+   bei Repos ohne Seite Repo + '#repo'. Die erste Kategorie ist die Hauptkategorie. */
+var CURATED = {
+  'pruefungsformate/': {t:'Ideensammlung Prüfungsformate', d:'Schieberegler einstellen und passende, dokumentierte Prüfungsbeispiele mit Quelle finden.', c:['Bewertung & Prüfung']},
+  'notenschluesselberechner/': {t:'Notenschlüsselberechner NCG', d:'Notenschlüssel für Sek I und Sek II mit mehreren Berechnungsmodi.', c:['Bewertung & Prüfung']},
+  'Notenschl-ssel/': {t:'Punkteverteilung Sek I / Sek II', d:'Notentabelle aus Maximalpunktzahl und Defizitschwelle, Export als PNG oder JPG.', c:['Bewertung & Prüfung']},
+  'bewertungsslider/': {t:'Bewertungsslider', d:'Bewertungsbogen mit gewichteten Kriterien und Qualitätsstufen erstellen.', c:['Bewertung & Prüfung']},
+  'pruefungsbeginnabgaberechner/': {t:'Klausurrechner NCG', d:'Klausurbeginn, Dauer und Abgabezeit je Fach und Stufe.', c:['Bewertung & Prüfung','Schulorganisation']},
+  'vokabeltester/': {t:'Vokabeltest', d:'Vokabeltests anlegen, per Code auf den iPads schreiben lassen und automatisch auswerten.', c:['Englisch','Bewertung & Prüfung']},
+  'examquiz/': {t:'Exam Check: Globalization & Climate Change', d:'Zehn Fragen zur Klausurvorbereitung, Q2 Englisch LK.', c:['Englisch']},
+  'zitierregeln/': {t:'Zitierregeln üben', d:'Textbelege und Zitate am ZP10-Text »Play« von Tobias Elsäßer.', c:['Deutsch']},
+  'zp10leseverstehen/': {t:'ZP10 Leseverstehen', d:'Übungsmodus mit den Aufgaben 2023 und 2025, Selbsteinschätzung mit Erwartungshorizont.', c:['Deutsch']},
+  'schon-wiede/': {t:'Schon wieder', d:'Scrolltext »Der Aufstieg der NSDAP/AfD«, Fassung November 2026.', c:['Deutsch']},
+  'bildanalysetrainer/': {t:'Bildanalyse-Werkstatt', d:'Bildanalyse für den Kunstunterricht üben.', c:['Kunst']},
+  'kumusterloesungewhgenerator#repo': {t:'Musterlösung und Erwartungshorizont Kunst', d:'Fachsprache und Formulierungsbausteine als Datengrundlage für Beispielanalysen im Kunst-LK.', c:['Kunst','KI']},
+  'ki-bildbearbeitung-prompt-builder/': {t:'Prompt-Builder Bildbearbeitung', d:'Prompts für KI-gestützte Bildbearbeitung zusammenstellen.', c:['Kunst','KI']},
+  'bildbearbeitungmitki/': {t:'Prompt-Builder Bildbearbeitung (zweites Repo)', d:'Kleinere Fassung des Prompt-Builders mit demselben Titel.', c:['Kunst','KI']},
+  'ki-labor/': {t:'KI-Labor', d:'Forschungsreise in Stationen: 3D-Raum, 14 Experimente und ein animierter Papierfilm.', c:['KI']},
+  'handypause-chat/': {t:'NCG Handyauszeit: FAQ-Chat', d:'Chatbot mit Antworten rund um die Handyauszeit.', c:['Schulorganisation','KI']},
+  'namen-lernen/': {t:'Namen lernen', d:'Vornamen der Lerngruppen mit Fotos und wechselnden Quizmodi üben.', c:['Schulorganisation']},
+  'Mathespiel/': {t:'Zahlenmission', d:'Drei Abenteuer mit 18 Aufgaben, Tipp-System und drei Schwierigkeitsgraden.', c:['Grundschule']},
+  'mattismathelerner/': {t:'Mattis Mathelerner', d:'Kleines Einmaleins als Ninja-Training, mit oder ohne Zeit.', c:['Grundschule']},
+  'mattismathelerner/rezept-werkstatt/': {t:'Rezept-Werkstatt', d:'Deutsch Klasse 3: Rezepte sortieren, ordnen und schreiben.', c:['Grundschule']},
+  'Mathespiel/bmx-hitster/': {t:'BMX Hitster', d:'Song hören und Fahrer, Video und Jahr erraten.', c:['Spiele']},
+  'Mathespiel/koelsch-hitster/': {t:'Zick eröm!', d:'Kölsche Songs hören und gemeinsam auf dem Zeitstrahl einordnen.', c:['Spiele']},
+  'troemmelche/': {t:'Trömmelche', d:'Kölsches Musikspiel für 1 bis 6 Teams mit mehreren Spielvarianten.', c:['Spiele']},
+  'worldcar/world-car.html': {t:'World Car', d:'Fahrspiel mit Energie- und Umweltanzeige.', c:['Spiele']},
+  'worldcar/koelsch-quest/': {t:'Kölsch Quest: Büdchen-Run', d:'8-Bit-Lauf durch Köln von Büdchen zu Büdchen.', c:['Spiele']},
+  'worldcar/koelsch-quest-3d/': {t:'Kölsch Quest 3D', d:'3D-Runner durch Köln mit Touch-Steuerung.', c:['Spiele']}
+};
+
+/* Stichwörter, nach denen neue, noch nicht fest einsortierte Werkzeuge eine Kategorie bekommen. */
+var RULES = [
+  [/noten|klausur|pr(ü|ue)f|bewert|punkte|erwartungs|korrektur/i, 'Bewertung & Prüfung'],
+  [/vokabel|vocab|english|englisch|exam/i, 'Englisch'],
+  [/zp10|zitier|lesetagebuch|leseversteh|deutsch|drama|lyrik|roman|aufsatz|schreib/i, 'Deutsch'],
+  [/kunst|bildanaly|portr(ä|ae)t|collage|foto|bildbearb/i, 'Kunst'],
+  [/(^|[^a-zäöü])ki([^a-zäöü]|$)|prompt|chatbot|sprachmodell/i, 'KI'],
+  [/grundschul|klasse[ -]?[1-4]([^0-9]|$)|einmaleins|mathe/i, 'Grundschule'],
+  [/spiel|quiz|hitster|quest|game|runner/i, 'Spiele'],
+  [/kurswahl|stundenplan|vertretung|handy|namen|exit-?ticket/i, 'Schulorganisation']
+];
+
+/* ---------- Zustand ---------- */
+var state = { repos: [], titles: {}, synced: null, live: false };
+var view = { q: '', cat: 'Alle', sort: 'kat' };
+
+function store(key, val){
+  try{
+    if (val === undefined) { var raw = localStorage.getItem(key); return raw ? JSON.parse(raw) : null; }
+    localStorage.setItem(key, JSON.stringify(val));
+  }catch(e){ return null; }
+}
+
+function snapRepos(){
+  return SNAP.map(function(s){
+    return { name: s[0], pushed: s[1], paths: s[2].slice(), pages: null, desc: '', url: 'https://github.com/' + USER + '/' + s[0] };
+  });
+}
+
+/* ---------- Seiten in einem Repo erkennen ---------- */
+function toolPaths(files){
+  var dirs = {};
+  files.forEach(function(p){
+    if (!/\.html?$/i.test(p)) return;
+    if (/(^|\/)(tests?|node_modules|\.[^\/]+)\//i.test(p)) return;
+    var cut = p.lastIndexOf('/');
+    var dir = cut < 0 ? '' : p.slice(0, cut + 1);
+    var file = cut < 0 ? p : p.slice(cut + 1);
+    if (/^404\.html?$/i.test(file)) return;
+    if (!dirs[dir]) dirs[dir] = { index: false, others: [] };
+    if (/^index\.html?$/i.test(file)) dirs[dir].index = true; else dirs[dir].others.push(p);
+  });
+  var out = [];
+  Object.keys(dirs).sort().forEach(function(dir){
+    if (dirs[dir].index) out.push(dir);
+    else dirs[dir].others.sort().forEach(function(p){ out.push(p); });
+  });
+  return out;
+}
+
+function pretty(s){
+  s = s.replace(/\.html?$/i,'').replace(/[-_]+/g,' ').replace(/\s+/g,' ').trim();
+  return s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
+}
+
+function guessCats(text){
+  for (var i = 0; i < RULES.length; i++) if (RULES[i][0].test(text)) return [RULES[i][1]];
+  return [UNSORTED];
+}
+
+function pagesBase(repo){
+  var root = 'https://' + USER + '.github.io/';
+  return repo.toLowerCase() === (USER + '.github.io') ? root : root + repo + '/';
+}
+
+function here(){
+  try{ return (location.origin + location.pathname).replace(/index\.html?$/i,''); }catch(e){ return ''; }
+}
+
+/* ---------- Werkzeugliste aus dem Repo-Stand bauen ---------- */
+function buildTools(){
+  var self = here();
+  var tools = [];
+  state.repos.forEach(function(r){
+    var paths = r.paths || [];
+    var entries = paths.length ? paths.map(function(p){ return { key: r.name + '/' + p, path: p }; })
+                               : [{ key: r.name + '#repo', path: null }];
+    entries.forEach(function(e){
+      var cur = CURATED[e.key];
+      var auto = state.titles[e.key] || {};
+      var url, repoOnly = e.path === null, noPages = false;
+      if (repoOnly) url = r.url;
+      else {
+        url = pagesBase(r.name) + e.path;
+        if (r.pages === false) { noPages = true; url = r.url; }
+      }
+      if (!repoOnly && url === self) return;                       // das Archiv listet sich nicht selbst
+      var lastSeg = e.path ? e.path.replace(/\/$/,'').split('/').pop() : '';
+      var title = cur ? cur.t : (auto.t || pretty(lastSeg || r.name));
+      var desc = cur ? cur.d : (auto.d || r.desc || '');
+      var cats = cur ? cur.c : guessCats([r.name, e.path || '', title, desc, (r.topics || []).join(' ')].join(' '));
+      tools.push({
+        key: e.key, repo: r.name, sig: USER + '/' + r.name + (e.path ? '/' + e.path.replace(/\/$/,'') : ''),
+        title: title, desc: desc, cats: cats, url: url, repoUrl: r.url, pushed: r.pushed || '',
+        isNew: !cur, repoOnly: repoOnly, noPages: noPages
+      });
+    });
+  });
+  return tools;
+}
+
+/* ---------- Darstellung ---------- */
+function el(tag, cls, text){
+  var n = document.createElement(tag);
+  if (cls) n.className = cls;
+  if (text !== undefined) n.textContent = text;
+  return n;
+}
+function norm(s){ return (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,''); }
+function fmtDate(iso){
+  if (!iso) return '';
+  var d = new Date(iso);
+  if (isNaN(d)) return '';
+  return d.toLocaleDateString('de-DE', { day:'2-digit', month:'2-digit', year:'numeric' });
+}
+
+function toolNode(t){
+  var li = el('li','tool');
+  var a = el('a','tool-main');
+  a.href = t.url; a.target = '_blank'; a.rel = 'noopener';
+  var head = el('span','tool-head');
+  head.appendChild(el('span','tool-title', t.title));
+  if (t.isNew) head.appendChild(el('span','badge','neu'));
+  if (t.repoOnly) head.appendChild(el('span','badge','nur Repo'));
+  if (t.noPages) head.appendChild(el('span','badge warn','Pages nicht aktiv'));
+  a.appendChild(head);
+  if (t.desc) a.appendChild(el('span','tool-desc', t.desc));
+  li.appendChild(a);
+  var meta = el('div','tool-meta');
+  meta.appendChild(el('span','sig', t.sig));
+  if (t.pushed) meta.appendChild(el('span','date','geändert ' + fmtDate(t.pushed)));
+  meta.appendChild(el('span','', t.cats.join(' · ')));
+  if (!t.repoOnly && !t.noPages){
+    var c = el('a','', 'Code');
+    c.href = t.repoUrl; c.target = '_blank'; c.rel = 'noopener';
+    meta.appendChild(c);
+  }
+  li.appendChild(meta);
+  return li;
+}
+
+function sorter(mode){
+  if (mode === 'neu') return function(a,b){ return (b.pushed || '').localeCompare(a.pushed || '') || a.title.localeCompare(b.title,'de'); };
+  return function(a,b){ return a.title.localeCompare(b.title,'de'); };
+}
+
+function render(){
+  var tools = buildTools();
+  var repoCount = state.repos.length;
+  document.getElementById('zaehler').textContent =
+    tools.length + (tools.length === 1 ? ' Werkzeug' : ' Werkzeuge') + ' in ' + repoCount + (repoCount === 1 ? ' Repo' : ' Repos');
+
+  /* Kategorien-Chips */
+  var cats = CATS.slice();
+  if (tools.some(function(t){ return t.cats.indexOf(UNSORTED) >= 0; })) cats.push(UNSORTED);
+  var counts = {};
+  tools.forEach(function(t){ t.cats.forEach(function(c){ counts[c] = (counts[c] || 0) + 1; }); });
+  if (view.cat !== 'Alle' && !counts[view.cat]) view.cat = 'Alle';
+  var chips = document.getElementById('chips');
+  chips.textContent = '';
+  [['Alle', tools.length]].concat(cats.filter(function(c){ return counts[c]; }).map(function(c){ return [c, counts[c]]; }))
+    .forEach(function(pair){
+      var b = el('button','chip');
+      b.type = 'button';
+      b.setAttribute('aria-pressed', String(view.cat === pair[0]));
+      b.appendChild(el('span','', pair[0]));
+      b.appendChild(el('span','n', String(pair[1])));
+      b.addEventListener('click', function(){ view.cat = pair[0]; saveView(); render(); });
+      chips.appendChild(b);
+    });
+
+  /* Filtern */
+  var q = norm(view.q.trim());
+  var shown = tools.filter(function(t){
+    if (view.cat !== 'Alle' && t.cats.indexOf(view.cat) < 0) return false;
+    if (!q) return true;
+    return norm([t.title, t.desc, t.sig, t.cats.join(' ')].join(' ')).indexOf(q) >= 0;
+  });
+
+  var list = document.getElementById('liste');
+  list.textContent = '';
+  if (!shown.length){
+    list.appendChild(el('p','empty', q ? 'Kein Treffer für „' + view.q.trim() + '“. Suchwort kürzen oder Kategorie auf „Alle“ stellen.' : 'Hier liegt noch nichts.'));
+    return;
+  }
+
+  var groups = [];
+  if (view.sort === 'kat' && view.cat === 'Alle'){
+    cats.forEach(function(c){
+      var items = shown.filter(function(t){ return t.cats[0] === c; }).sort(sorter('az'));
+      if (items.length) groups.push([c, items]);
+    });
+  } else {
+    var label = view.cat === 'Alle' ? (view.sort === 'neu' ? 'Zuletzt geändert' : 'A bis Z') : view.cat;
+    groups.push([label, shown.slice().sort(sorter(view.sort === 'kat' ? 'az' : view.sort))]);
+  }
+  groups.forEach(function(g){
+    var sec = el('section','group');
+    var h = el('h2');
+    h.appendChild(el('span','', g[0]));
+    h.appendChild(el('span','n', String(g[1].length)));
+    sec.appendChild(h);
+    var ul = el('ul','tools');
+    g[1].forEach(function(t){ ul.appendChild(toolNode(t)); });
+    sec.appendChild(ul);
+    list.appendChild(sec);
+  });
+}
+
+function setStatus(kind, text){
+  document.getElementById('status').dataset.state = kind;
+  document.getElementById('statustext').textContent = text;
+}
+function standText(){
+  if (state.synced) {
+    var d = new Date(state.synced);
+    return 'vom ' + d.toLocaleDateString('de-DE') + ', ' + d.toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'}) + ' Uhr';
+  }
+  return 'vom ' + fmtDate(SNAP_DATE + 'T12:00:00Z');
+}
+
+/* ---------- Abgleich mit GitHub ---------- */
+function getJSON(url){
+  return fetch(url, { headers: { 'Accept': 'application/vnd.github+json' } }).then(function(r){
+    if (r.status === 403 || r.status === 429) { var e = new Error('limit'); e.kind = 'limit'; throw e; }
+    if (r.status === 404 || r.status === 409) return null;         // nicht vorhanden oder leeres Repo
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    return r.json();
+  });
+}
+
+function fetchPaths(g){
+  var url = 'https://api.github.com/repos/' + USER + '/' + encodeURIComponent(g.name) +
+            '/git/trees/' + encodeURIComponent(g.default_branch || 'main') + '?recursive=1';
+  return getJSON(url).then(function(j){
+    if (!j || !j.tree) return [];
+    return toolPaths(j.tree.filter(function(x){ return x.type === 'blob'; }).map(function(x){ return x.path; }));
+  });
+}
+
+/* Titel und Beschreibung neuer Seiten direkt aus der Seite lesen. Geht nur, wenn das Archiv
+   selbst unter <USER>.github.io liegt (gleiche Herkunft). Es wird nur der Kopf der Datei geladen. */
+function fetchTitle(url){
+  return fetch(url, { headers: { 'Range': 'bytes=0-16383' } }).then(function(r){
+    if (!r.ok || !r.body) return null;
+    var reader = r.body.getReader(), dec = new TextDecoder(), s = '';
+    function step(){
+      return reader.read().then(function(res){
+        if (!res.done) s += dec.decode(res.value, { stream: true });
+        if (res.done || s.length > 40000 || /<\/head>|<body/i.test(s)) {
+          try{ reader.cancel(); }catch(e){}
+          var doc = new DOMParser().parseFromString(s, 'text/html');
+          var m = doc.querySelector('meta[name="description"]');
+          return { t: (doc.title || '').trim().slice(0,120), d: m ? (m.getAttribute('content') || '').trim().slice(0,240) : '' };
+        }
+        return step();
+      });
+    }
+    return step();
+  }).catch(function(){ return null; });
+}
+
+var syncing = false;
+function sync(){
+  if (syncing) return;
+  syncing = true;
+  setStatus('busy', 'Gleiche mit GitHub ab …');
+  var prev = {};
+  state.repos.forEach(function(r){ prev[r.name] = r; });
+
+  getJSON('https://api.github.com/users/' + USER + '/repos?per_page=100&sort=pushed').then(function(list){
+    if (!Array.isArray(list)) throw new Error('Konto nicht gefunden');
+    var partial = false;
+    return Promise.all(list.filter(function(g){ return !g.fork; }).map(function(g){
+      var old = prev[g.name];
+      var base = { name: g.name, pushed: g.pushed_at, pages: g.has_pages, desc: g.description || '', topics: g.topics || [], url: g.html_url };
+      if (old && old.paths && old.pushed === g.pushed_at) { base.paths = old.paths; return base; }
+      return fetchPaths(g).then(function(paths){ base.paths = paths; return base; }, function(){
+        partial = true;
+        base.paths = old && old.paths ? old.paths : (g.has_pages ? [''] : []);
+        base.stale = true;
+        return base;
+      });
+    })).then(function(next){
+      state.repos = next; state.live = true; state.synced = Date.now();
+      return fillTitles().then(function(){
+        /* Repos, deren Ordnerliste nicht geladen werden konnte, beim nächsten Mal erneut prüfen */
+        store(STORE_KEY, { v: 1, synced: state.synced, titles: state.titles,
+          repos: next.map(function(r){ var c = {}; for (var k in r) c[k] = r[k]; if (c.stale) { c.pushed = null; delete c.stale; } return c; }) });
+        render();
+        var t = new Date(state.synced).toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'});
+        if (partial) setStatus('warn', 'Abgeglichen um ' + t + ' Uhr. Einige Repos konnten nicht vollständig gelesen werden, bitte später neu abgleichen.');
+        else setStatus('ok', 'Live mit GitHub abgeglichen um ' + t + ' Uhr.');
+      });
+    });
+  }).catch(function(e){
+    if (e && e.kind === 'limit') setStatus('warn', 'GitHub nimmt gerade keine weiteren Abfragen an (Grenze: 60 pro Stunde). Gezeigt wird der Stand ' + standText() + '.');
+    else setStatus('warn', 'Kein Live-Abgleich möglich (Vorschau oder offline). Gezeigt wird der Stand ' + standText() + '.');
+  }).then(function(){ syncing = false; });
+}
+
+function fillTitles(){
+  var sameOrigin = false;
+  try{ sameOrigin = location.hostname.toLowerCase() === USER + '.github.io'; }catch(e){}
+  if (!sameOrigin) return Promise.resolve();
+  var jobs = [];
+  state.repos.forEach(function(r){
+    if (r.pages === false) return;
+    (r.paths || []).forEach(function(p){
+      var key = r.name + '/' + p;
+      var have = state.titles[key];
+      if (CURATED[key] || (have && have.pushed === r.pushed)) return;
+      jobs.push(fetchTitle(pagesBase(r.name) + p).then(function(res){
+        if (res && (res.t || res.d)) state.titles[key] = { t: res.t, d: res.d, pushed: r.pushed };
+      }));
+    });
+  });
+  return Promise.all(jobs);
+}
+
+/* ---------- Start ---------- */
+function saveView(){ store(STORE_KEY + '-ansicht', { cat: view.cat, sort: view.sort }); }
+
+(function init(){
+  var cached = store(STORE_KEY);
+  if (cached && cached.v === 1 && Array.isArray(cached.repos) && cached.repos.length){
+    state.repos = cached.repos; state.titles = cached.titles || {}; state.synced = cached.synced || null;
+  } else {
+    state.repos = snapRepos();
+  }
+  var v = store(STORE_KEY + '-ansicht');
+  if (v && typeof v.cat === 'string') view.cat = v.cat;
+  if (v && /^(kat|neu|az)$/.test(v.sort)) view.sort = v.sort;
+
+  var suche = document.getElementById('suche');
+  var sortierung = document.getElementById('sortierung');
+  sortierung.value = view.sort;
+  suche.addEventListener('input', function(){ view.q = suche.value; render(); });
+  sortierung.addEventListener('change', function(){ view.sort = sortierung.value; saveView(); render(); });
+  document.getElementById('abgleichen').addEventListener('click', sync);
+
+  render();
+  sync();
+})();
+
+})();
+</script>
+</body>
+</html>
