@@ -136,6 +136,16 @@ ul.tools{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;g
 #liste{display:flex;flex-direction:column;gap:24px}
 footer{font-size:.84rem;color:var(--muted);border-top:1px solid var(--line);padding-top:14px;max-width:65ch}
 footer p{margin:0 0 6px}
+.mover{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;font-size:.84rem;color:var(--muted);border-top:1px dashed var(--line);padding-top:8px}
+.mover select{background:var(--paper);border:1px solid var(--line);border-radius:8px;padding:6px 8px;font-size:.88rem;min-width:0;max-width:100%}
+.mover .grip{font-size:1.1rem;line-height:1;cursor:grab;color:var(--muted);padding:0 4px;user-select:none}
+.mode-on .tool{cursor:grab}
+.tool.dragging{opacity:.4}
+.chip.drop,.group.drop{outline:2px dashed var(--accent);outline-offset:3px}
+.group.drop{border-radius:12px}
+.editbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.linkbtn[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--surface)}
+.hint{font-size:.84rem;color:var(--muted)}
 @media (max-width:480px){
   h1{font-size:1.6rem}
   .wrap{padding:22px 16px 48px}
@@ -163,12 +173,18 @@ footer p{margin:0 0 6px}
       </select>
     </div>
     <div class="chips" id="chips" role="group" aria-label="Kategorie wählen"></div>
+    <div class="editbar">
+      <button type="button" class="linkbtn" id="umordnen" aria-pressed="false">Kategorien ändern</button>
+      <button type="button" class="linkbtn" id="zuruecksetzen" hidden>Alle Änderungen zurücksetzen</button>
+      <span class="hint" id="edithint" hidden>Pro Eintrag die Kategorie wählen oder die Karte auf eine Kategorie ziehen.</span>
+    </div>
   </section>
 
   <main id="liste"></main>
 
   <footer>
     <p>Die Seite liest bei jedem Öffnen die Repo-Liste von GitHub. Neue Repos und neue Unterordner mit einer <code>index.html</code> erscheinen von selbst, gelöschte verschwinden.</p>
+    <p>Verschobene Einträge merkt sich dieser Browser. Auf einem anderen Gerät beginnt die Ansicht wieder mit der Grundeinteilung.</p>
     <p>Neue Einträge werden nach Stichwörtern einsortiert und tragen die Marke „neu“, bis sie einen festen Titel und eine Kategorie bekommen.</p>
   </footer>
 </div>
@@ -181,6 +197,7 @@ footer p{margin:0 0 6px}
 var USER = 'wiegweb';
 var SNAP_DATE = '2026-11-15';            // Stand der eingebauten Liste
 var STORE_KEY = 'werkzeugarchiv-v1';
+var MOVES_KEY = 'werkzeugarchiv-zuordnung';
 var CATS = ['Bewertung & Prüfung','Deutsch','Englisch','Kunst','KI','Schulorganisation','Grundschule','Spiele'];
 var UNSORTED = 'Noch unsortiert';
 
@@ -254,8 +271,8 @@ var RULES = [
 ];
 
 /* ---------- Zustand ---------- */
-var state = { repos: [], titles: {}, synced: null, live: false };
-var view = { q: '', cat: 'Alle', sort: 'kat' };
+var state = { repos: [], titles: {}, synced: null, live: false, moves: {} };
+var view = { q: '', cat: 'Alle', sort: 'kat', edit: false };
 
 function store(key, val){
   try{
@@ -332,10 +349,12 @@ function buildTools(){
       var title = cur ? cur.t : (auto.t || pretty(lastSeg || r.name));
       var desc = cur ? cur.d : (auto.d || r.desc || '');
       var cats = cur ? cur.c : guessCats([r.name, e.path || '', title, desc, (r.topics || []).join(' ')].join(' '));
+      var moved = state.moves[e.key] && CATS.indexOf(state.moves[e.key]) >= 0;
+      if (moved) cats = [state.moves[e.key]];
       tools.push({
-        key: e.key, repo: r.name, sig: USER + '/' + r.name + (e.path ? '/' + e.path.replace(/\/$/,'') : ''),
+        moved: !!moved, key: e.key, repo: r.name, sig: USER + '/' + r.name + (e.path ? '/' + e.path.replace(/\/$/,'') : ''),
         title: title, desc: desc, cats: cats, url: url, repoUrl: r.url, pushed: r.pushed || '',
-        isNew: !cur, repoOnly: repoOnly, noPages: noPages
+        isNew: !cur && !moved, repoOnly: repoOnly, noPages: noPages
       });
     });
   });
@@ -359,6 +378,14 @@ function fmtDate(iso){
 
 function toolNode(t){
   var li = el('li','tool');
+  if (view.edit){
+    li.draggable = true;
+    li.addEventListener('dragstart', function(ev){
+      dragKey = t.key; li.classList.add('dragging');
+      try{ ev.dataTransfer.setData('text/plain', t.key); ev.dataTransfer.effectAllowed = 'move'; }catch(e){}
+    });
+    li.addEventListener('dragend', function(){ dragKey = null; li.classList.remove('dragging'); clearDrops(); });
+  }
   var a = el('a','tool-main');
   a.href = t.url; a.target = '_blank'; a.rel = 'noopener';
   var head = el('span','tool-head');
@@ -379,6 +406,22 @@ function toolNode(t){
     meta.appendChild(c);
   }
   li.appendChild(meta);
+  if (view.edit){
+    var mv = el('div','mover');
+    mv.appendChild(el('span','grip','⠿'));
+    var lab = el('label','', 'Kategorie:');
+    lab.htmlFor = 'mv-' + t.key.replace(/[^a-z0-9]/gi,'_');
+    mv.appendChild(lab);
+    var sel = document.createElement('select');
+    sel.id = lab.htmlFor;
+    var opts = CATS.slice();
+    if (opts.indexOf(t.cats[0]) < 0) { var o0 = el('option','', t.cats[0]); o0.value = t.cats[0]; o0.disabled = true; sel.appendChild(o0); }
+    opts.forEach(function(c){ var o = el('option','', c); o.value = c; sel.appendChild(o); });
+    sel.value = t.cats[0];
+    sel.addEventListener('change', function(){ moveTool(t.key, sel.value); });
+    mv.appendChild(sel);
+    li.appendChild(mv);
+  }
   return li;
 }
 
@@ -387,7 +430,24 @@ function sorter(mode){
   return function(a,b){ return a.title.localeCompare(b.title,'de'); };
 }
 
+var dragKey = null;
+function clearDrops(){ document.querySelectorAll('.drop').forEach(function(n){ n.classList.remove('drop'); }); }
+function makeDrop(node, cat){
+  node.addEventListener('dragover', function(ev){ if (!dragKey) return; ev.preventDefault(); node.classList.add('drop'); });
+  node.addEventListener('dragleave', function(ev){ if (!node.contains(ev.relatedTarget)) node.classList.remove('drop'); });
+  node.addEventListener('drop', function(ev){ ev.preventDefault(); var k = dragKey; dragKey = null; clearDrops(); if (k) moveTool(k, cat); });
+}
+function moveTool(key, cat){
+  state.moves[key] = cat;
+  store(MOVES_KEY, state.moves);
+  render();
+}
 function render(){
+  document.getElementById('liste').classList.toggle('mode-on', view.edit);
+  document.getElementById('umordnen').setAttribute('aria-pressed', String(view.edit));
+  document.getElementById('umordnen').textContent = view.edit ? 'Fertig' : 'Kategorien ändern';
+  document.getElementById('edithint').hidden = !view.edit;
+  document.getElementById('zuruecksetzen').hidden = !Object.keys(state.moves).length;
   var tools = buildTools();
   var repoCount = state.repos.length;
   document.getElementById('zaehler').textContent =
@@ -409,6 +469,7 @@ function render(){
       b.appendChild(el('span','', pair[0]));
       b.appendChild(el('span','n', String(pair[1])));
       b.addEventListener('click', function(){ view.cat = pair[0]; saveView(); render(); });
+      if (view.edit && CATS.indexOf(pair[0]) >= 0) makeDrop(b, pair[0]);
       chips.appendChild(b);
     });
 
@@ -439,6 +500,7 @@ function render(){
   }
   groups.forEach(function(g){
     var sec = el('section','group');
+    if (view.edit && CATS.indexOf(g[0]) >= 0) makeDrop(sec, g[0]);
     var h = el('h2');
     h.appendChild(el('span','', g[0]));
     h.appendChild(el('span','n', String(g[1].length)));
@@ -571,6 +633,7 @@ function saveView(){ store(STORE_KEY + '-ansicht', { cat: view.cat, sort: view.s
   } else {
     state.repos = snapRepos();
   }
+  var mv = store(MOVES_KEY); if (mv && typeof mv === 'object') state.moves = mv;
   var v = store(STORE_KEY + '-ansicht');
   if (v && typeof v.cat === 'string') view.cat = v.cat;
   if (v && /^(kat|neu|az)$/.test(v.sort)) view.sort = v.sort;
@@ -581,6 +644,10 @@ function saveView(){ store(STORE_KEY + '-ansicht', { cat: view.cat, sort: view.s
   suche.addEventListener('input', function(){ view.q = suche.value; render(); });
   sortierung.addEventListener('change', function(){ view.sort = sortierung.value; saveView(); render(); });
   document.getElementById('abgleichen').addEventListener('click', sync);
+  document.getElementById('umordnen').addEventListener('click', function(){ view.edit = !view.edit; render(); });
+  document.getElementById('zuruecksetzen').addEventListener('click', function(){
+    state.moves = {}; store(MOVES_KEY, state.moves); render();
+  });
 
   render();
   sync();
