@@ -12,5 +12,9 @@
    "vokabeltester/"
   ]
  },
- "edits": {}
+ "edits": {
+  "pruefungsformate/": {
+   "t": "Ideensammlung Alternative Prüfungsformate"
+  }
+ }
 }
