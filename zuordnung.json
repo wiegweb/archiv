@@ -5,8 +5,8 @@
  "order": {
   "Bewertung & Prüfung": [
    "pruefungsbeginnabgaberechner/",
-   "pruefungsformate/",
    "notenschluesselberechner/",
+   "pruefungsformate/",
    "bewertungsslider/",
    "Notenschl-ssel/",
    "vokabeltester/"
