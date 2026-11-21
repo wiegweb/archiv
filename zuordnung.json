@@ -15,6 +15,9 @@
  "edits": {
   "pruefungsformate/": {
    "t": "Ideensammlung Alternative Prüfungsformate"
+  },
+  "pruefungsbeginnabgaberechner/": {
+   "t": "Klausurabgabezeitrechner NCG"
   }
  }
 }
