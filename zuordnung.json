@@ -1,5 +1,16 @@
 {
  "v": 1,
  "moves": {},
- "custom": []
+ "custom": [],
+ "order": {
+  "Bewertung & Prüfung": [
+   "pruefungsbeginnabgaberechner/",
+   "bewertungsslider/",
+   "pruefungsformate/",
+   "notenschluesselberechner/",
+   "Notenschl-ssel/",
+   "vokabeltester/"
+  ]
+ },
+ "edits": {}
 }
