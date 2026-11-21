@@ -110,8 +110,22 @@ button,select,input{font:inherit;color:inherit}
 ul.tools{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
 .tool{
   background:var(--surface);border:1px solid var(--line);border-radius:12px;
-  padding:13px 15px;display:flex;flex-direction:column;gap:7px;
+  padding:13px 8px 13px 15px;display:flex;flex-direction:row;align-items:stretch;gap:8px;
 }
+.tool-col{flex:1;min-width:0;display:flex;flex-direction:column;gap:7px}
+.grip{
+  flex:none;align-self:center;width:38px;height:56px;border:0;background:none;color:var(--muted);
+  font-size:1.35rem;line-height:1;cursor:grab;touch-action:none;border-radius:8px;user-select:none;-webkit-user-select:none;
+}
+.grip:hover,.grip:focus-visible{background:var(--paper);color:var(--accent)}
+.tool.lift{box-shadow:0 8px 22px rgba(0,0,0,.22);border-color:var(--accent);position:relative;z-index:5;opacity:.97}
+.tool.lift .grip{cursor:grabbing}
+.icon{padding:6px 10px;font-size:.95rem;line-height:1}
+.edited{font-style:normal}
+textarea.search{min-height:84px;resize:vertical;width:100%;flex:1 1 100%}
+dialog label.lbl{display:block;font-size:.84rem;color:var(--muted);margin-top:10px}
+dialog input.search{width:100%;flex:1 1 100%}
+.mv{margin-left:auto}
 .tool-main{color:inherit;text-decoration:none;display:flex;flex-direction:column;gap:3px}
 .tool-head{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 9px}
 .tool-title{font-weight:680;font-size:1.06rem;color:var(--accent);overflow-wrap:anywhere}
@@ -149,7 +163,7 @@ footer p{margin:0 0 6px}
 .newcat .search{flex:1 1 200px;padding:7px 12px}
 .chip .x{margin-left:2px;padding:0 4px;border-radius:50%;cursor:pointer;font-weight:700}
 .chip .x:hover{background:var(--warn-soft);color:var(--warn)}
-.mv{margin-left:auto;padding:6px 14px;font-size:.88rem}
+.mv{padding:6px 14px;font-size:.88rem}
 dialog{border:1px solid var(--line);border-radius:14px;background:var(--surface);color:var(--ink);padding:18px;max-width:min(440px,calc(100vw - 32px));width:100%;font:inherit}
 dialog::backdrop{background:rgba(10,20,26,.5)}
 dialog h3{margin:0 0 4px;font-size:1.05rem;overflow-wrap:anywhere}
@@ -203,7 +217,7 @@ dialog ol{margin:6px 0;padding-left:20px;font-size:.9rem;color:var(--muted)}
 
   <footer>
     <p>Die Seite liest bei jedem Öffnen die Repo-Liste von GitHub. Neue Repos und neue Unterordner mit einer <code>index.html</code> erscheinen von selbst, gelöschte verschwinden.</p>
-    <p>Mit „Verschieben“ an jeder Karte änderst du die Kategorie. Die Zuordnung wird als Datei <code>zuordnung.json</code> im Repo gespeichert und gilt für alle, die die Seite öffnen. Speichern können nur Geräte mit eingerichtetem Zugang.</p>
+    <p>Mit „Kategorie ändern“ an jeder Karte wechselst du die Kategorie, mit dem Stift bearbeitest du Titel und Beschreibung, am Griff rechts ziehst du die Reihenfolge zurecht (nur in der Ansicht „Nach Kategorie“ ohne Suche). Die Zuordnung wird als Datei <code>zuordnung.json</code> im Repo gespeichert und gilt für alle, die die Seite öffnen. Speichern können nur Geräte mit eingerichtetem Zugang.</p>
     <p>Neue Einträge werden nach Stichwörtern einsortiert und tragen die Marke „neu“, bis sie einen festen Titel und eine Kategorie bekommen.</p>
   </footer>
 </div>
@@ -223,7 +237,7 @@ var TOKEN_KEY = 'werkzeugarchiv-zugang';
 var ARCHIV_REPO = 'archiv';
 var DATEI = 'zuordnung.json';
 var custom = [];
-var shared = { moves: {}, custom: [] };   // letzter bekannter Stand aus dem Repo
+var shared = { moves: {}, custom: [], order: {}, edits: {} };   // letzter bekannter Stand aus dem Repo
 var pending = [];                         // noch nicht gespeicherte Änderungen
 var BASE_CATS = ['Bewertung & Prüfung','Deutsch','Englisch','Kunst','KI','Schulorganisation','Grundschule','Spiele'];
 var UNSORTED = 'Noch unsortiert';
@@ -296,7 +310,7 @@ var RULES = [
 ];
 
 /* ---------- Zustand ---------- */
-var state = { repos: [], titles: {}, synced: null, live: false, moves: {} };
+var state = { repos: [], titles: {}, synced: null, live: false, moves: {}, order: {}, edits: {} };
 var view = { q: '', cat: 'Alle', sort: 'kat', edit: false };
 
 function store(key, val){
@@ -374,10 +388,12 @@ function buildTools(){
       var title = cur ? cur.t : (auto.t || pretty(lastSeg || r.name));
       var desc = cur ? cur.d : (auto.d || r.desc || '');
       var cats = cur ? cur.c : guessCats([r.name, e.path || '', title, desc, (r.topics || []).join(' ')].join(' '));
+      var ed = state.edits[e.key];
+      if (ed){ if (ed.t) title = ed.t; if (typeof ed.d === 'string') desc = ed.d; }
       var moved = state.moves[e.key] && CATS.indexOf(state.moves[e.key]) >= 0;
       if (moved) cats = [state.moves[e.key]];
       tools.push({
-        moved: !!moved, key: e.key, repo: r.name, sig: USER + '/' + r.name + (e.path ? '/' + e.path.replace(/\/$/,'') : ''),
+        moved: !!moved, edited: !!ed, origTitle: cur ? cur.t : (auto.t || pretty(lastSeg || r.name)), origDesc: cur ? cur.d : (auto.d || r.desc || ''), key: e.key, repo: r.name, sig: USER + '/' + r.name + (e.path ? '/' + e.path.replace(/\/$/,'') : ''),
         title: title, desc: desc, cats: cats, url: url, repoUrl: r.url, pushed: r.pushed || '',
         isNew: !cur && !moved, repoOnly: repoOnly, noPages: noPages
       });
@@ -401,18 +417,20 @@ function fmtDate(iso){
   return d.toLocaleDateString('de-DE', { day:'2-digit', month:'2-digit', year:'numeric' });
 }
 
-function toolNode(t){
-  var li = el('li','tool');
+function toolNode(t, cat, canDrag){
+  var li = el('li','tool'); li.dataset.key = t.key;
+  var col = el('div','tool-col');
   var a = el('a','tool-main');
   a.href = t.url; a.target = '_blank'; a.rel = 'noopener';
   var head = el('span','tool-head');
   head.appendChild(el('span','tool-title', t.title));
   if (t.isNew) head.appendChild(el('span','badge','neu'));
+  if (t.edited) head.appendChild(el('span','badge','bearbeitet'));
   if (t.repoOnly) head.appendChild(el('span','badge','nur Repo'));
   if (t.noPages) head.appendChild(el('span','badge warn','Pages nicht aktiv'));
   a.appendChild(head);
   if (t.desc) a.appendChild(el('span','tool-desc', t.desc));
-  li.appendChild(a);
+  col.appendChild(a);
   var meta = el('div','tool-meta');
   meta.appendChild(el('span','sig', t.sig));
   if (t.pushed) meta.appendChild(el('span','date','geändert ' + fmtDate(t.pushed)));
@@ -422,17 +440,101 @@ function toolNode(t){
     c.href = t.repoUrl; c.target = '_blank'; c.rel = 'noopener';
     meta.appendChild(c);
   }
-  li.appendChild(meta);
-  var mvb = el('button','linkbtn mv','Verschieben');
-  mvb.type = 'button';
+  col.appendChild(meta);
+  var acts = el('div','tool-meta');
+  var mvb = el('button','linkbtn mv','Kategorie ändern'); mvb.type = 'button';
   mvb.addEventListener('click', function(){ openMove(t); });
-  meta.appendChild(mvb);
+  var pen = el('button','linkbtn icon','✎'); pen.type = 'button';
+  pen.title = 'Titel und Beschreibung bearbeiten'; pen.setAttribute('aria-label','Titel und Beschreibung bearbeiten');
+  pen.addEventListener('click', function(){ openEdit(t); });
+  acts.appendChild(mvb); acts.appendChild(pen);
+  col.appendChild(acts);
+  li.appendChild(col);
+  if (canDrag){
+    var g = el('button','grip','⠿'); g.type = 'button';
+    g.title = 'Reihenfolge ändern: ziehen oder mit Pfeiltasten'; g.setAttribute('aria-label','Reihenfolge ändern');
+    attachDrag(g, li, cat);
+    li.appendChild(g);
+  }
   return li;
 }
 
-function sorter(mode){
+/* ---------- Reihenfolge per Ziehen am Griff (Maus, Touch, Pfeiltasten) ---------- */
+function saveOrder(ul, cat){
+  var keys = [].map.call(ul.children, function(n){ return n.dataset.key; });
+  queueOp({ t:'order', cat:cat, keys:keys });
+}
+function attachDrag(handle, li, cat){
+  var st = null;
+  function reset(items){ items.forEach(function(n){ n.style.transform = ''; n.style.transition = ''; n.style.zIndex = ''; }); li.classList.remove('lift'); }
+  function calc(clientY){
+    var dy = (clientY - st.startY) + (window.scrollY - st.startScroll);
+    var center = st.rects[st.idx0].top + st.rects[st.idx0].height / 2 + dy;
+    var n = 0;
+    st.rects.forEach(function(r, k){ if (k !== st.idx0 && r.top + r.height / 2 < center) n++; });
+    st.newIdx = n; st.dy = dy;
+    var shift = st.rects[st.idx0].height + st.gap;
+    st.items.forEach(function(el_, k){
+      if (k === st.idx0) { el_.style.transform = 'translateY(' + dy + 'px)'; return; }
+      var move = 0;
+      if (st.idx0 < st.newIdx && k > st.idx0 && k <= st.newIdx) move = -shift;
+      else if (st.idx0 > st.newIdx && k >= st.newIdx && k < st.idx0) move = shift;
+      el_.style.transform = move ? 'translateY(' + move + 'px)' : '';
+    });
+  }
+  function tick(){
+    if (!st) return;
+    var h = window.innerHeight;
+    if (st.lastY < 70) window.scrollBy(0, -12); else if (st.lastY > h - 70) window.scrollBy(0, 12);
+    calc(st.lastY);
+  }
+  handle.addEventListener('pointerdown', function(ev){
+    if (ev.button !== undefined && ev.button !== 0) return;
+    ev.preventDefault();
+    var items = [].slice.call(li.parentNode.children);
+    var cs = getComputedStyle(li.parentNode);
+    var gap = parseFloat(cs.rowGap || cs.gap) || 8;
+    st = { items: items, idx0: items.indexOf(li), newIdx: items.indexOf(li), gap: gap, startY: ev.clientY, lastY: ev.clientY,
+           startScroll: window.scrollY, rects: items.map(function(n){ var r = n.getBoundingClientRect(); return { top: r.top + window.scrollY, height: r.height }; }), timer: setInterval(tick, 30) };
+    items.forEach(function(n){ if (n !== li) n.style.transition = 'transform .14s ease'; });
+    li.classList.add('lift');
+    try{ handle.setPointerCapture(ev.pointerId); }catch(e){}
+  });
+  handle.addEventListener('pointermove', function(ev){ if (!st) return; st.lastY = ev.clientY; calc(ev.clientY); });
+  function end(ev){
+    if (!st) return;
+    var cur = st; st = null; clearInterval(cur.timer);
+    try{ handle.releasePointerCapture(ev.pointerId); }catch(e){}
+    var changed = ev.type === 'pointerup' && cur.newIdx !== cur.idx0;
+    reset(cur.items);
+    if (changed){
+      var keys = cur.items.map(function(n){ return n.dataset.key; });
+      var k = keys.splice(cur.idx0, 1)[0]; keys.splice(cur.newIdx, 0, k);
+      queueOp({ t:'order', cat:cat, keys:keys });
+    }
+  }
+  handle.addEventListener('pointerup', end);
+  handle.addEventListener('pointercancel', end);
+  handle.addEventListener('keydown', function(ev){
+    if (ev.key !== 'ArrowUp' && ev.key !== 'ArrowDown') return;
+    ev.preventDefault();
+    var parent = li.parentNode;
+    if (ev.key === 'ArrowUp' && li.previousSibling) parent.insertBefore(li, li.previousSibling);
+    else if (ev.key === 'ArrowDown' && li.nextSibling) parent.insertBefore(li.nextSibling, li);
+    else return;
+    handle.focus(); saveOrder(parent, cat);
+    var again = document.querySelector('li.tool[data-key="' + li.dataset.key.replace(/"/g,'') + '"] .grip'); if (again) again.focus();
+  });
+}
+
+function sorter(mode, cat){
   if (mode === 'neu') return function(a,b){ return (b.pushed || '').localeCompare(a.pushed || '') || a.title.localeCompare(b.title,'de'); };
-  return function(a,b){ return a.title.localeCompare(b.title,'de'); };
+  var order = (cat && state.order[cat]) || [];
+  return function(a,b){
+    var ia = order.indexOf(a.key), ib = order.indexOf(b.key);
+    if (ia < 0) ia = 99999; if (ib < 0) ib = 99999;
+    return (ia - ib) || a.title.localeCompare(b.title,'de');
+  };
 }
 
 function syncCats(){
@@ -444,25 +546,39 @@ function cleanName(n){ return (n || '').replace(/\s+/g,' ').trim().slice(0,40); 
 /* Änderungen als kleine Operationen: so lassen sie sich auf den frischen Stand eines anderen Geräts anwenden. */
 function applyOp(o, op){
   if (op.t === 'move'){ if (op.cat) o.moves[op.key] = op.cat; else delete o.moves[op.key]; }
+  else if (op.t === 'order'){ o.order[op.cat] = op.keys; }
+  else if (op.t === 'edit'){
+    var x = {}; if (op.title) x.t = op.title; if (typeof op.desc === 'string') x.d = op.desc;
+    if (x.t !== undefined || x.d !== undefined) o.edits[op.key] = x; else delete o.edits[op.key];
+  }
   else if (op.t === 'add'){ if (o.custom.indexOf(op.name) < 0) o.custom.push(op.name); }
   else if (op.t === 'del'){
     o.custom = o.custom.filter(function(c){ return c !== op.name; });
+    delete o.order[op.name];
     Object.keys(o.moves).forEach(function(k){ if (o.moves[k] === op.name) delete o.moves[k]; });
   }
 }
 function normShared(j){
-  var o = { moves: {}, custom: [] };
+  var o = { moves: {}, custom: [], order: {}, edits: {} };
   if (j && typeof j === 'object'){
     if (j.moves && typeof j.moves === 'object') Object.keys(j.moves).forEach(function(k){ if (typeof j.moves[k] === 'string') o.moves[k] = j.moves[k]; });
     if (Array.isArray(j.custom)) o.custom = j.custom.filter(function(c){ return typeof c === 'string' && c; });
+    if (j.order && typeof j.order === 'object') Object.keys(j.order).forEach(function(c){ if (Array.isArray(j.order[c])) o.order[c] = j.order[c].filter(function(k){ return typeof k === 'string'; }); });
+    if (j.edits && typeof j.edits === 'object') Object.keys(j.edits).forEach(function(k){
+      var e = j.edits[k]; if (!e || typeof e !== 'object') return;
+      var x = {}; if (typeof e.t === 'string' && e.t) x.t = e.t; if (typeof e.d === 'string') x.d = e.d;
+      if (x.t !== undefined || x.d !== undefined) o.edits[k] = x;
+    });
   }
   return o;
 }
 function recompute(){
-  var o = { moves: {}, custom: shared.custom.slice() };
+  var o = { moves: {}, custom: shared.custom.slice(), order: {}, edits: {} };
   Object.keys(shared.moves).forEach(function(k){ o.moves[k] = shared.moves[k]; });
+  Object.keys(shared.order).forEach(function(c){ o.order[c] = shared.order[c].slice(); });
+  Object.keys(shared.edits).forEach(function(k){ o.edits[k] = shared.edits[k]; });
   pending.forEach(function(op){ applyOp(o, op); });
-  state.moves = o.moves; custom = o.custom; syncCats();
+  state.moves = o.moves; state.order = o.order; state.edits = o.edits; custom = o.custom; syncCats();
   if (view.cat !== 'Alle' && CATS.indexOf(view.cat) < 0 && view.cat !== UNSORTED) view.cat = 'Alle';
 }
 function persistLocal(){ store(MOVES_KEY, { shared: shared, pending: pending }); }
@@ -495,7 +611,7 @@ function flush(){
     }).then(function(cur){
       pending.slice(0, batch).forEach(function(op){ applyOp(cur.obj, op); });
       var body = { message: 'Zuordnung im Werkzeugarchiv geändert', branch: 'main',
-                   content: toB64(JSON.stringify({ v: 1, moves: cur.obj.moves, custom: cur.obj.custom }, null, 1) + '\n') };
+                   content: toB64(JSON.stringify({ v: 1, moves: cur.obj.moves, custom: cur.obj.custom, order: cur.obj.order, edits: cur.obj.edits }, null, 1) + '\n') };
       if (cur.sha) body.sha = cur.sha;
       return fetch(apiUrl, { method: 'PUT', headers: authHeaders(tok), body: JSON.stringify(body) }).then(function(r){
         if ((r.status === 409 || r.status === 422) && n < 2) return attempt(n + 1);
@@ -555,13 +671,13 @@ function footClose(d, label){
 }
 function needToken(){
   if (getToken()) return false;
-  openSetup('Zum Verschieben und Anlegen brauchst du einmal pro Gerät einen Zugang. Danach gilt jede Änderung auf allen Geräten.');
+  openSetup('Zum Ändern brauchst du einmal pro Gerät einen Zugang. Danach gilt jede Änderung auf allen Geräten.');
   return true;
 }
 function openMove(t){
   if (needToken()) return;
   showDlg(function(d){
-    d.appendChild(el('h3','', '„' + t.title + '“ verschieben nach'));
+    d.appendChild(el('h3','', 'Kategorie für „' + t.title + '“ ändern'));
     var grid = el('div','catgrid');
     CATS.forEach(function(c){
       var b = el('button','catbtn', c); b.type = 'button';
@@ -594,6 +710,35 @@ function openMove(t){
     }
     var cb = el('button','linkbtn','Abbrechen'); cb.type = 'button'; cb.addEventListener('click', closeDlg);
     foot.appendChild(cb); d.appendChild(foot);
+  });
+}
+function openEdit(t){
+  if (needToken()) return;
+  showDlg(function(d){
+    d.appendChild(el('h3','', 'Titel und Beschreibung bearbeiten'));
+    var form = document.createElement('form');
+    var l1 = el('label','lbl','Titel'); l1.htmlFor = 'ed-t';
+    var i1 = document.createElement('input'); i1.id = 'ed-t'; i1.className = 'search'; i1.type = 'text'; i1.maxLength = 120; i1.value = t.title;
+    var l2 = el('label','lbl','Beschreibung'); l2.htmlFor = 'ed-d';
+    var i2 = document.createElement('textarea'); i2.id = 'ed-d'; i2.className = 'search'; i2.maxLength = 400; i2.value = t.desc;
+    form.appendChild(l1); form.appendChild(i1); form.appendChild(l2); form.appendChild(i2);
+    var foot = el('div','dlgfoot');
+    if (t.edited){
+      var rb = el('button','linkbtn','Auf Original zurücksetzen'); rb.type = 'button';
+      rb.addEventListener('click', function(){ closeDlg(); queueOp({ t:'edit', key:t.key, title:'', desc:null }); });
+      foot.appendChild(rb);
+    }
+    var cb = el('button','linkbtn','Abbrechen'); cb.type = 'button'; cb.addEventListener('click', closeDlg);
+    var sb = el('button','linkbtn','Speichern'); sb.type = 'submit';
+    foot.appendChild(cb); foot.appendChild(sb); form.appendChild(foot); d.appendChild(form);
+    form.addEventListener('submit', function(ev){
+      ev.preventDefault();
+      var title = i1.value.replace(/\s+/g,' ').trim(), desc = i2.value.replace(/\s+/g,' ').trim();
+      closeDlg();
+      if (title === t.origTitle && desc === t.origDesc) { if (t.edited) queueOp({ t:'edit', key:t.key, title:'', desc:null }); return; }
+      queueOp({ t:'edit', key:t.key, title: title === t.origTitle ? '' : title, desc: desc === t.origDesc ? null : desc });
+    });
+    setTimeout(function(){ i1.focus(); }, 30);
   });
 }
 function openManage(){
@@ -692,19 +837,20 @@ function render(){
   var list = document.getElementById('liste');
   list.textContent = '';
   if (!shown.length){
-    list.appendChild(el('p','empty', (!q && custom.indexOf(view.cat) >= 0) ? 'Diese Kategorie ist noch leer. Mit „Verschieben“ an einer Karte Werkzeuge hierher holen.' : q ? 'Kein Treffer für „' + view.q.trim() + '“. Suchwort kürzen oder Kategorie auf „Alle“ stellen.' : 'Hier liegt noch nichts.'));
+    list.appendChild(el('p','empty', (!q && custom.indexOf(view.cat) >= 0) ? 'Diese Kategorie ist noch leer. Mit „Kategorie ändern“ an einer Karte Werkzeuge hierher holen.' : q ? 'Kein Treffer für „' + view.q.trim() + '“. Suchwort kürzen oder Kategorie auf „Alle“ stellen.' : 'Hier liegt noch nichts.'));
     return;
   }
 
   var groups = [];
   if (view.sort === 'kat' && view.cat === 'Alle'){
     cats.forEach(function(c){
-      var items = shown.filter(function(t){ return t.cats[0] === c; }).sort(sorter('az'));
-      if (items.length) groups.push([c, items]);
+      var items = shown.filter(function(t){ return t.cats[0] === c; }).sort(sorter('az', c));
+      if (items.length) groups.push([c, items, c]);
     });
   } else {
     var label = view.cat === 'Alle' ? (view.sort === 'neu' ? 'Zuletzt geändert' : 'A bis Z') : view.cat;
-    groups.push([label, shown.slice().sort(sorter(view.sort === 'kat' ? 'az' : view.sort))]);
+    var orderCat = (view.sort === 'kat' && view.cat !== 'Alle') ? view.cat : null;
+    groups.push([label, shown.slice().sort(sorter(view.sort === 'kat' ? 'az' : view.sort, orderCat)), orderCat]);
   }
   groups.forEach(function(g){
     var sec = el('section','group');
@@ -713,8 +859,9 @@ function render(){
     h.appendChild(el('span','n', String(g[1].length)));
     sec.appendChild(h);
     var ul = el('ul','tools');
-    g[1].forEach(function(t){ ul.appendChild(toolNode(t)); });
+    var canDrag = !!g[2] && !q && view.sort === 'kat';
     sec.appendChild(ul);
+    g[1].forEach(function(t){ ul.appendChild(toolNode(t, g[2], canDrag)); });
     list.appendChild(sec);
   });
 }
