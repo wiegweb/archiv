@@ -145,6 +145,10 @@ footer p{margin:0 0 6px}
 .group.drop{border-radius:12px}
 .editbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 .linkbtn[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--surface)}
+.newcat{display:flex;gap:8px;flex:1 1 100%;flex-wrap:wrap}
+.newcat .search{flex:1 1 200px;padding:7px 12px}
+.chip .x{margin-left:2px;padding:0 4px;border-radius:50%;cursor:pointer;font-weight:700}
+.chip .x:hover{background:var(--warn-soft);color:var(--warn)}
 .hint{font-size:.84rem;color:var(--muted)}
 @media (max-width:480px){
   h1{font-size:1.6rem}
@@ -176,6 +180,10 @@ footer p{margin:0 0 6px}
     <div class="editbar">
       <button type="button" class="linkbtn" id="umordnen" aria-pressed="false">Kategorien ändern</button>
       <button type="button" class="linkbtn" id="zuruecksetzen" hidden>Alle Änderungen zurücksetzen</button>
+      <form class="newcat" id="neuekat" hidden>
+        <input class="search" id="katname" type="text" maxlength="40" placeholder="Neue Kategorie, z. B. Referendariat" aria-label="Name der neuen Kategorie" autocomplete="off">
+        <button type="submit" class="linkbtn">Kategorie anlegen</button>
+      </form>
       <span class="hint" id="edithint" hidden>Pro Eintrag die Kategorie wählen oder die Karte auf eine Kategorie ziehen.</span>
     </div>
   </section>
@@ -198,8 +206,11 @@ var USER = 'wiegweb';
 var SNAP_DATE = '2026-11-15';            // Stand der eingebauten Liste
 var STORE_KEY = 'werkzeugarchiv-v1';
 var MOVES_KEY = 'werkzeugarchiv-zuordnung';
-var CATS = ['Bewertung & Prüfung','Deutsch','Englisch','Kunst','KI','Schulorganisation','Grundschule','Spiele'];
+var CUSTOM_KEY = 'werkzeugarchiv-kategorien';
+var custom = [];
+var BASE_CATS = ['Bewertung & Prüfung','Deutsch','Englisch','Kunst','KI','Schulorganisation','Grundschule','Spiele'];
 var UNSORTED = 'Noch unsortiert';
+var CATS = BASE_CATS.slice();
 
 /* Eingebauter Stand: Repo, letzter Push, gefundene Seiten ('' = index.html im Hauptordner).
    Stimmt der Push-Zeitpunkt noch, muss GitHub für dieses Repo nicht erneut gefragt werden. */
@@ -434,6 +445,22 @@ function makeDrop(node, cat){
   node.addEventListener('dragleave', function(ev){ if (!node.contains(ev.relatedTarget)) node.classList.remove('drop'); });
   node.addEventListener('drop', function(ev){ ev.preventDefault(); var k = dragKey; dragKey = null; clearDrops(); if (k) moveTool(k, cat); });
 }
+function syncCats(){
+  BASE_CATS.concat(custom.filter(function(c){ return BASE_CATS.indexOf(c) < 0; })).forEach(function(c){ if (CATS.indexOf(c) < 0) CATS.push(c); });
+  for (var i = CATS.length - 1; i >= 0; i--) if (BASE_CATS.indexOf(CATS[i]) < 0 && custom.indexOf(CATS[i]) < 0) CATS.splice(i, 1);
+}
+function addCat(name){
+  name = (name || '').replace(/\s+/g,' ').trim();
+  if (!name || name === UNSORTED) return false;
+  var hit = CATS.filter(function(c){ return c.toLowerCase() === name.toLowerCase(); })[0];
+  if (hit) { view.cat = hit; return true; }
+  custom.push(name); store(CUSTOM_KEY, custom); syncCats(); view.cat = name; return true;
+}
+function removeCat(name){
+  custom = custom.filter(function(c){ return c !== name; }); store(CUSTOM_KEY, custom);
+  Object.keys(state.moves).forEach(function(k){ if (state.moves[k] === name) delete state.moves[k]; });
+  store(MOVES_KEY, state.moves); syncCats(); if (view.cat === name) view.cat = 'Alle';
+}
 function moveTool(key, cat){
   state.moves[key] = cat;
   store(MOVES_KEY, state.moves);
@@ -444,6 +471,7 @@ function render(){
   document.getElementById('umordnen').setAttribute('aria-pressed', String(view.edit));
   document.getElementById('umordnen').textContent = view.edit ? 'Fertig' : 'Kategorien ändern';
   document.getElementById('edithint').hidden = !view.edit;
+  document.getElementById('neuekat').hidden = !view.edit;
   document.getElementById('zuruecksetzen').hidden = !Object.keys(state.moves).length;
   var tools = buildTools();
   var repoCount = state.repos.length;
@@ -455,16 +483,21 @@ function render(){
   if (tools.some(function(t){ return t.cats.indexOf(UNSORTED) >= 0; })) cats.push(UNSORTED);
   var counts = {};
   tools.forEach(function(t){ t.cats.forEach(function(c){ counts[c] = (counts[c] || 0) + 1; }); });
-  if (view.cat !== 'Alle' && !counts[view.cat]) view.cat = 'Alle';
+  if (view.cat !== 'Alle' && !counts[view.cat] && custom.indexOf(view.cat) < 0) view.cat = 'Alle';
   var chips = document.getElementById('chips');
   chips.textContent = '';
-  [['Alle', tools.length]].concat(cats.filter(function(c){ return counts[c]; }).map(function(c){ return [c, counts[c]]; }))
+  [['Alle', tools.length]].concat(cats.filter(function(c){ return counts[c] || custom.indexOf(c) >= 0; }).map(function(c){ return [c, counts[c] || 0]; }))
     .forEach(function(pair){
       var b = el('button','chip');
       b.type = 'button';
       b.setAttribute('aria-pressed', String(view.cat === pair[0]));
       b.appendChild(el('span','', pair[0]));
       b.appendChild(el('span','n', String(pair[1])));
+      if (view.edit && custom.indexOf(pair[0]) >= 0){
+        var x = el('span','x','×'); x.title = 'Kategorie entfernen';
+        x.addEventListener('click', function(ev){ ev.stopPropagation(); removeCat(pair[0]); saveView(); render(); });
+        b.appendChild(x);
+      }
       b.addEventListener('click', function(){ view.cat = pair[0]; saveView(); render(); });
       if (view.edit && CATS.indexOf(pair[0]) >= 0) makeDrop(b, pair[0]);
       chips.appendChild(b);
@@ -481,7 +514,7 @@ function render(){
   var list = document.getElementById('liste');
   list.textContent = '';
   if (!shown.length){
-    list.appendChild(el('p','empty', q ? 'Kein Treffer für „' + view.q.trim() + '“. Suchwort kürzen oder Kategorie auf „Alle“ stellen.' : 'Hier liegt noch nichts.'));
+    list.appendChild(el('p','empty', (!q && custom.indexOf(view.cat) >= 0) ? 'Diese Kategorie ist noch leer. Über „Kategorien ändern“ Werkzeuge hierher verschieben.' : q ? 'Kein Treffer für „' + view.q.trim() + '“. Suchwort kürzen oder Kategorie auf „Alle“ stellen.' : 'Hier liegt noch nichts.'));
     return;
   }
 
@@ -630,6 +663,7 @@ function saveView(){ store(STORE_KEY + '-ansicht', { cat: view.cat, sort: view.s
   } else {
     state.repos = snapRepos();
   }
+  var cu = store(CUSTOM_KEY); if (Array.isArray(cu)) custom = cu.filter(function(c){ return typeof c === 'string' && c; }); syncCats();
   var mv = store(MOVES_KEY); if (mv && typeof mv === 'object') state.moves = mv;
   var v = store(STORE_KEY + '-ansicht');
   if (v && typeof v.cat === 'string') view.cat = v.cat;
@@ -641,6 +675,10 @@ function saveView(){ store(STORE_KEY + '-ansicht', { cat: view.cat, sort: view.s
   suche.addEventListener('input', function(){ view.q = suche.value; render(); });
   sortierung.addEventListener('change', function(){ view.sort = sortierung.value; saveView(); render(); });
   document.getElementById('abgleichen').addEventListener('click', sync);
+  document.getElementById('neuekat').addEventListener('submit', function(ev){
+    ev.preventDefault(); var inp = document.getElementById('katname');
+    if (addCat(inp.value)) { inp.value = ''; saveView(); render(); }
+  });
   document.getElementById('umordnen').addEventListener('click', function(){ view.edit = !view.edit; render(); });
   document.getElementById('zuruecksetzen').addEventListener('click', function(){
     state.moves = {}; store(MOVES_KEY, state.moves); render();
