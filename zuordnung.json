@@ -1,6 +1,8 @@
 {
  "v": 1,
- "moves": {},
+ "moves": {
+  "schon-wiede/": "Kunst"
+ },
  "custom": [],
  "order": {
   "Bewertung & Prüfung": [
